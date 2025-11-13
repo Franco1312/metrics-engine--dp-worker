@@ -43,14 +43,37 @@ async def main_loop() -> None:
     
     # Load AWS credentials from Settings to environment for boto3
     import os
+    has_credentials = False
     if settings.aws_access_key_id:
         os.environ["AWS_ACCESS_KEY_ID"] = settings.aws_access_key_id
+        has_credentials = True
     if settings.aws_secret_access_key:
         os.environ["AWS_SECRET_ACCESS_KEY"] = settings.aws_secret_access_key
+        has_credentials = True
     if settings.aws_session_token:
         os.environ["AWS_SESSION_TOKEN"] = settings.aws_session_token
     
-    logger.info("settings_loaded", region=settings.aws_region, bucket=settings.aws_s3_bucket)
+    # Check if credentials are available from environment or .env
+    env_has_access_key = bool(os.environ.get("AWS_ACCESS_KEY_ID"))
+    env_has_secret_key = bool(os.environ.get("AWS_SECRET_ACCESS_KEY"))
+    
+    logger.info(
+        "settings_loaded",
+        region=settings.aws_region,
+        bucket=settings.aws_s3_bucket,
+        sqs_queue_url=settings.aws_sqs_run_request_queue_url,
+        sqs_queue_enabled=settings.aws_sqs_run_request_queue_enabled,
+        credentials_from_settings=has_credentials,
+        credentials_from_env=env_has_access_key and env_has_secret_key,
+        has_access_key=env_has_access_key,
+        has_secret_key=env_has_secret_key,
+    )
+    
+    if not env_has_access_key or not env_has_secret_key:
+        logger.warning(
+            "aws_credentials_missing",
+            message="AWS credentials not found. Make sure AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY are set in .env or environment",
+        )
 
     start_metrics_server(settings)
 

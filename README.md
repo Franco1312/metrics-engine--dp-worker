@@ -8,7 +8,7 @@ This service is a batch/event-driven worker that:
 
 - Consumes `metric_run_requested` events from SNS/SQS FIFO
 - Resolves input dataset manifests
-- Reads Parquet data from S3 with column pruning and predicate pushdown
+- Reads Parquet data from S3 in parallel with column pruning and predicate pushdown
 - Evaluates metric expressions (series_math, window_op, composite)
 - Writes output Parquet files and manifests
 - Publishes status events (started, heartbeat, completed)
@@ -37,6 +37,7 @@ metrics_worker/
 - ✅ Expression evaluation: `series_math`, `window_op`, `composite`
 - ✅ Window operations: SMA, EMA, sum, max, min, lag
 - ✅ Efficient Parquet reading with PyArrow (column pruning, predicate pushdown)
+- ✅ Parallel series reading for improved performance
 - ✅ Idempotency by runId
 - ✅ Structured JSON logging (structlog)
 - ✅ Prometheus metrics
@@ -170,7 +171,8 @@ Para detalles completos de los contratos de eventos:
   "catalog": {
     "datasets": {
       "dataset_id": {
-        "manifestPath": "path/to/manifest.json"
+        "manifestPath": "path/to/manifest.json",
+        "projectionsPath": "path/to/projections/"
       }
     }
   },
@@ -280,6 +282,19 @@ El worker publica eventos a **SNS Topics** separados. El Control Plane consume d
 - `MANIFEST_VALIDATION_ERROR`: Output manifest validation failed
 - `CONFIG_ERROR`: Configuration error
 - `INTERNAL_ERROR`: Internal processing error
+
+## Data Reading Flow
+
+The worker reads series data using the following process:
+
+1. **Extract manifest information**: From the event's `catalog`, get `manifestPath` and `projectionsPath` for each dataset
+2. **Read dataset manifest**: Fetch the manifest JSON from S3 to get the list of `parquet_files`
+3. **Filter relevant files**: Identify which parquet files contain the needed series (based on `series_codes` in the manifest)
+4. **Construct full paths**: Combine `projectionsPath` + `parquet_file_path` to get the complete S3 paths
+5. **Read in parallel**: All series are read concurrently using `asyncio.gather` for optimal performance
+6. **Apply filters**: PyArrow applies column pruning and predicate pushdown for efficient data reading
+
+For more details, see [docs/DATA_FLOW.md](docs/DATA_FLOW.md).
 
 ## S3 Structure
 

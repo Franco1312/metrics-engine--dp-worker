@@ -7,7 +7,7 @@ from pyarrow import Table
 from pyarrow.fs import S3FileSystem
 
 from metrics_worker.domain.ports import DataReaderPort
-from metrics_worker.domain.types import SeriesFrame, Timestamp
+from metrics_worker.domain.types import SeriesFrame
 from metrics_worker.infrastructure.aws.s3_io import S3IO
 from metrics_worker.infrastructure.aws.s3_path import S3Path
 from metrics_worker.infrastructure.observability.metrics import s3_read_mb
@@ -23,35 +23,48 @@ class ParquetReader(DataReaderPort):
         self.s3_io = s3_io
         self.bucket = s3_io.bucket
 
-    async def read_series(
+    async def read_series_from_paths(
         self,
-        data_prefix: str,
+        parquet_paths: list[str],
         series_code: str,
-        since_version_ts: Timestamp | None = None,
     ) -> SeriesFrame:
-        """Read series data from S3 Parquet."""
-        s3_path = S3Path.to_full_path(self.bucket, data_prefix)
+        """Read series data from specific parquet file paths."""
+        if not parquet_paths:
+            raise ValueError(f"No parquet paths provided for series {series_code}")
+
+        # PyArrow S3FileSystem expects paths in format: bucket/key (not s3://bucket/key)
+        # So we need to construct paths as bucket/path
+        pyarrow_paths = [
+            f"{self.bucket}/{path.lstrip('/')}" for path in parquet_paths
+        ]
 
         logger.info(
-            "reading_series",
+            "reading_series_from_paths",
             series_code=series_code,
-            data_prefix=data_prefix,
-            s3_path=s3_path,
+            parquet_paths=parquet_paths,
+            pyarrow_paths=pyarrow_paths,
             bucket=self.bucket,
         )
 
         filesystem = S3FileSystem()
         try:
-            dataset = ds.dataset(s3_path, format="parquet", filesystem=filesystem)
+            # Create dataset from multiple parquet files
+            # PyArrow expects paths in format: bucket/key
+            dataset = ds.dataset(
+                pyarrow_paths,
+                format="parquet",
+                filesystem=filesystem,
+            )
         except (OSError, FileNotFoundError, ValueError) as e:
             logger.error(
-                "failed_to_open_dataset",
+                "failed_to_open_dataset_from_paths",
                 series_code=series_code,
-                s3_path=s3_path,
+                parquet_paths=parquet_paths,
+                pyarrow_paths=pyarrow_paths,
                 error=str(e),
             )
             raise ValueError(
-                f"Series not found: {series_code} (failed to open dataset at {s3_path}): {e}"
+                f"Series not found: {series_code} (failed to open dataset from paths): {e}"
             ) from e
 
         columns = ["obs_time", "value", "internal_series_code"]
@@ -67,13 +80,14 @@ class ParquetReader(DataReaderPort):
             available_series = self._list_available_series(dataset)
             error_msg = (
                 f"Series not found: {series_code} "
-                f"(searched in s3://{self.bucket}/{data_prefix}). "
+                f"(searched in {len(parquet_paths)} parquet files). "
                 f"Available series: {available_series[:20] if available_series else 'none found'}"
             )
             logger.error(
-                "series_not_found",
+                "series_not_found_in_paths",
                 series_code=series_code,
-                s3_path=s3_path,
+                parquet_paths=parquet_paths,
+                pyarrow_paths=pyarrow_paths,
                 available_count=len(available_series) if available_series else 0,
                 available_series=available_series[:10] if available_series else [],
             )
@@ -81,8 +95,8 @@ class ParquetReader(DataReaderPort):
 
         df = table.to_pandas()
 
-        df = df[df["internal_series_code"] == series_code].copy()
-        df = df[["obs_time", "value"]].copy()
+        # Filter already applied in scanner, but double-check and select columns
+        df = df[df["internal_series_code"] == series_code][["obs_time", "value"]].copy()
         df["obs_time"] = df["obs_time"].astype("datetime64[ns]")
         df["value"] = df["value"].astype("float64")
         df = df.sort_values("obs_time").reset_index(drop=True)
@@ -91,10 +105,11 @@ class ParquetReader(DataReaderPort):
         s3_read_mb.observe(size_mb)
 
         logger.info(
-            "series_read_success",
+            "series_read_success_from_paths",
             series_code=series_code,
             row_count=len(df),
             size_mb=size_mb,
+            parquet_files_count=len(parquet_paths),
         )
 
         return df

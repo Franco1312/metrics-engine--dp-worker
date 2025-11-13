@@ -33,16 +33,32 @@ class OutputManifestDict(TypedDict):
 class DatasetInfo(TypedDict):
     """Dataset information in catalog."""
     manifestPath: str
+    projectionsPath: str
 
 class CatalogDict(TypedDict):
     """Catalog dictionary structure."""
     datasets: dict[str, DatasetInfo]
 
 # Dataset manifest structure (from S3)
+class DateRangeDict(TypedDict):
+    """Date range structure in dataset manifest."""
+    min_obs_time: str
+    max_obs_time: str
+
+
 class DatasetManifestDict(TypedDict, total=False):
     """Dataset manifest dictionary structure."""
-    outputs: dict[str, JsonValue]
-    files: list[str] | None
+    version_id: str
+    dataset_id: str
+    created_at: str
+    collection_date: str
+    data_points_count: int
+    series_count: int
+    series_codes: list[str]
+    date_range: DateRangeDict
+    parquet_files: list[str]
+    partitions: list[str]
+    partition_strategy: str
 
 # Manifest serialization structure
 class ManifestSerializationDict(TypedDict):

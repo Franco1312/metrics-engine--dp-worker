@@ -72,8 +72,10 @@
 │    │     │     Para cada input:                              │ │ │
 │    │     │     ├─ Catalog.get_dataset_manifest()             │ │ │
 │    │     │     │  └─ S3CatalogAdapter → S3IO.get_json()    │ │ │
-│    │     │     ├─ Extraer data_prefix del manifest          │ │ │
-│    │     │     └─ ParquetReader.read_series()                │ │ │
+│    │     │     ├─ Extraer parquet_files del manifest        │ │ │
+│    │     │     ├─ Construir paths: projectionsPath +        │ │ │
+│    │     │     │  parquet_file_path                          │ │ │
+│    │     │     └─ ParquetReader.read_series_from_paths()    │ │ │
 │    │     │        └─ PyArrow Dataset:                        │ │ │
 │    │     │           • Column pruning (obs_time, value)      │ │ │
 │    │     │           • Predicate pushdown (series_code)      │ │ │

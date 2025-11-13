@@ -2,7 +2,7 @@
 
 from abc import ABC, abstractmethod
 
-from metrics_worker.domain.entities import MetricOutputManifest, SeriesRef
+from metrics_worker.domain.entities import MetricOutputManifest
 from metrics_worker.domain.types import DatasetManifestDict, SeriesFrame, Timestamp
 
 
@@ -18,13 +18,12 @@ class DataReaderPort(ABC):
     """Port for reading series data."""
 
     @abstractmethod
-    async def read_series(
+    async def read_series_from_paths(
         self,
-        data_prefix: str,
+        parquet_paths: list[str],
         series_code: str,
-        since_version_ts: Timestamp | None = None,
     ) -> SeriesFrame:
-        """Read series data from storage."""
+        """Read series data from specific parquet file paths."""
 
 
 class OutputWriterPort(ABC):

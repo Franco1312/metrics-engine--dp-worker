@@ -1,5 +1,8 @@
 """Handle metric run request - main orchestration."""
 
+import asyncio
+from dataclasses import dataclass
+
 import pandas as pd
 import structlog
 
@@ -30,6 +33,17 @@ from metrics_worker.infrastructure.aws.s3_path import S3Path
 logger = structlog.get_logger()
 
 
+@dataclass
+class _OutputPaths:
+    """Output paths for metric run results."""
+
+    parquet_path: str
+    manifest_path: str
+    current_manifest_path: str
+    marker_path: str
+    manifest_relative_path: str
+
+
 async def run(
     event: MetricRunRequestedEvent,
     catalog: CatalogPort,
@@ -53,7 +67,7 @@ async def run(
             event.inputs,
         )
 
-        series_data = await _read_series_data(
+        series_data = await _read_all_series(
             read_plan,
             event.catalog,
             catalog,
@@ -66,24 +80,21 @@ async def run(
             series_data,
         )
 
-        row_count = _get_row_count(result_df)
         version_ts = clock.format_version_ts(clock.now())
-
         output_paths = _calculate_output_paths(event.output["basePath"], version_ts, run_id)
 
-        manifest = await _write_results(
+        manifest = await _write_output(
             result_df,
             run_id,
             metric_code,
             version_ts,
-            row_count,
+            len(result_df),
             output_paths,
             output_writer,
             clock,
         )
 
         await validate_manifest(manifest, run_id, metric_code)
-
         await output_writer.create_run_marker(output_paths.marker_path)
 
         await run_success(
@@ -91,11 +102,11 @@ async def run(
             metric_code,
             version_ts,
             output_paths.manifest_relative_path,
-            row_count,
+            len(result_df),
             event_bus,
         )
 
-        logger.info("run_completed", run_id=run_id, status="SUCCESS", row_count=row_count)
+        logger.info("run_completed", run_id=run_id, status="SUCCESS", row_count=len(result_df))
 
     except Exception as e:
         error_code, error_message = _classify_error(e)
@@ -110,109 +121,122 @@ async def run(
         await run_failure(run_id, metric_code, error_code, error_message, event_bus)
 
 
-async def _read_series_data(
+# ============================================================================
+# Series Reading
+# ============================================================================
+
+
+async def _read_all_series(
     read_plan: ReadPlan,
     catalog_info: dict,
     catalog: CatalogPort,
     data_reader: DataReaderPort,
 ) -> dict[str, SeriesFrame]:
     """Read all series data according to the read plan."""
-    series_data: dict[str, SeriesFrame] = {}
     dataset_manifests: dict[str, DatasetManifest] = {}
+    manifest_lock = asyncio.Lock()
 
+    # Read all dataset manifests first (in parallel, with lock protection)
+    async def get_manifest_safe(dataset_id: str) -> None:
+        async with manifest_lock:
+            if dataset_id not in dataset_manifests:
+                manifest_path = catalog_info["datasets"][dataset_id]["manifestPath"]
+                manifest_dict = await catalog.get_dataset_manifest(manifest_path)
+                dataset_manifests[dataset_id] = DatasetManifest(**manifest_dict)
+
+    manifest_tasks = [
+        get_manifest_safe(dataset_id)
+        for dataset_id in read_plan.series_by_dataset.keys()
+    ]
+    await asyncio.gather(*manifest_tasks)
+
+    # Read all series in parallel across all datasets
+    series_tasks = []
     for dataset_id, series_codes in read_plan.series_by_dataset.items():
-        dataset_info = catalog_info["datasets"][dataset_id]
-        manifest_path = dataset_info["manifestPath"]
-
-        logger.info(
-            "reading_dataset_series",
-            dataset_id=dataset_id,
-            manifest_path=manifest_path,
-            series_codes=series_codes,
-        )
-
-        if dataset_id not in dataset_manifests:
-            manifest_dict = await catalog.get_dataset_manifest(manifest_path)
-            dataset_manifests[dataset_id] = DatasetManifest(**manifest_dict)
-
         dataset_manifest = dataset_manifests[dataset_id]
-        data_prefix = dataset_manifest.outputs["data_prefix"]
-
-        logger.info(
-            "reading_series_from_dataset",
-            dataset_id=dataset_id,
-            data_prefix=data_prefix,
-            series_count=len(series_codes),
-        )
-
+        projections_path = catalog_info["datasets"][dataset_id]["projectionsPath"]
+        
         for series_code in series_codes:
-            try:
-                series_df = await data_reader.read_series(data_prefix, series_code)
-                series_data[series_code] = series_df
-                logger.info(
-                    "series_read_success",
-                    series_code=series_code,
-                    dataset_id=dataset_id,
-                    row_count=len(series_df),
-                )
-            except (ValueError, OSError) as e:
-                logger.error(
-                    "failed_to_read_series",
-                    series_code=series_code,
-                    dataset_id=dataset_id,
-                    data_prefix=data_prefix,
-                    error=str(e),
-                )
-                raise
+            task = _read_single_series(
+                series_code,
+                dataset_id,
+                projections_path,
+                dataset_manifest.parquet_files,
+                data_reader,
+            )
+            series_tasks.append((series_code, task))
+
+    # Execute all reads in parallel
+    results = await asyncio.gather(*[task for _, task in series_tasks], return_exceptions=True)
+
+    # Build result dictionary, handling any errors
+    series_data: dict[str, SeriesFrame] = {}
+    for (series_code, _), result in zip(series_tasks, results):
+        if isinstance(result, Exception):
+            raise result
+        series_data[series_code] = result
 
     return series_data
 
 
-def _get_row_count(result_df: pd.DataFrame) -> int:
-    """Get row count from result dataframe."""
-    return len(result_df)
+async def _read_single_series(
+    series_code: str,
+    dataset_id: str,
+    projections_path: str,
+    all_parquet_files: list[str],
+    data_reader: DataReaderPort,
+) -> SeriesFrame:
+    """Read a single series from its parquet files."""
+    # Find parquet files for this specific series
+    series_files = [f for f in all_parquet_files if series_code in f]
+
+    if not series_files:
+        raise ValueError(
+            f"No parquet files found for series {series_code} in dataset {dataset_id}"
+        )
+
+    full_paths = [S3Path.join(projections_path, f) for f in series_files]
+
+    try:
+        series_df = await data_reader.read_series_from_paths(full_paths, series_code)
+        logger.info(
+            "series_read_success",
+            series_code=series_code,
+            dataset_id=dataset_id,
+            row_count=len(series_df),
+            parquet_files_used=len(series_files),
+        )
+        return series_df
+    except (ValueError, OSError) as e:
+        logger.error(
+            "failed_to_read_series",
+            series_code=series_code,
+            dataset_id=dataset_id,
+            projections_path=projections_path,
+            error=str(e),
+        )
+        raise
 
 
-class _OutputPaths:
-    """Output paths for metric run results."""
-
-    def __init__(
-        self,
-        parquet_path: str,
-        manifest_path: str,
-        current_manifest_path: str,
-        marker_path: str,
-        manifest_relative_path: str,
-    ) -> None:
-        """Initialize output paths."""
-        self.parquet_path = parquet_path
-        self.manifest_path = manifest_path
-        self.current_manifest_path = current_manifest_path
-        self.marker_path = marker_path
-        self.manifest_relative_path = manifest_relative_path
+# ============================================================================
+# Output Writing
+# ============================================================================
 
 
 def _calculate_output_paths(base_path: str, version_ts: str, run_id: str) -> _OutputPaths:
     """Calculate all output paths for metric run."""
-    normalized_path = S3Path.normalize(base_path)
-    prefix = S3Path.rstrip_separator(normalized_path)
-
-    parquet_path = S3Path.join(prefix, version_ts, "data", "metrics.parquet")
-    manifest_path = S3Path.join(prefix, version_ts, "manifest.json")
-    current_manifest_path = S3Path.join(prefix, "current", "manifest.json")
-    marker_path = S3Path.join(prefix, "runs", f"{run_id}.ok")
-    manifest_relative_path = manifest_path
+    prefix = S3Path.rstrip_separator(S3Path.normalize(base_path))
 
     return _OutputPaths(
-        parquet_path=parquet_path,
-        manifest_path=manifest_path,
-        current_manifest_path=current_manifest_path,
-        marker_path=marker_path,
-        manifest_relative_path=manifest_relative_path,
+        parquet_path=S3Path.join(prefix, version_ts, "data", "metrics.parquet"),
+        manifest_path=S3Path.join(prefix, version_ts, "manifest.json"),
+        current_manifest_path=S3Path.join(prefix, "current", "manifest.json"),
+        marker_path=S3Path.join(prefix, "runs", f"{run_id}.ok"),
+        manifest_relative_path=S3Path.join(prefix, version_ts, "manifest.json"),
     )
 
 
-async def _write_results(
+async def _write_output(
     result_df: pd.DataFrame,
     run_id: str,
     metric_code: str,
@@ -244,6 +268,11 @@ async def _write_results(
     await output_writer.write_manifest(manifest, output_paths.current_manifest_path)
 
     return manifest
+
+
+# ============================================================================
+# Error Handling
+# ============================================================================
 
 
 def _classify_error(error: Exception) -> tuple[str, str]:

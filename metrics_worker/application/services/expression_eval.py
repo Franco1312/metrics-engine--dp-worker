@@ -216,8 +216,9 @@ def _resolve_operand(
         raise InvalidExpressionError("Missing operand")
 
     # Direct series reference
-    if "series_code" in operand:
-        series_code = operand["series_code"]
+    # Support both snake_case and camelCase for series_code
+    series_code = operand.get("series_code") or operand.get("seriesCode")
+    if series_code:
         if series_code not in series_data:
             raise ExpressionEvaluationError(f"Series not found: {series_code}")
         return series_data[series_code].copy()

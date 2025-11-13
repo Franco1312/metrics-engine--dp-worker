@@ -2,8 +2,6 @@
 
 import json
 
-import pytest
-
 from metrics_worker.application.dto.events import MetricRunRequestedEvent
 
 
@@ -34,6 +32,7 @@ def test_parse_metric_run_requested_event():
             "datasets": {
                 "bcra_infomondia_series": {
                     "manifestPath": "bcra_infomondia_series/current/manifest.json",
+                    "projectionsPath": "projections/bcra_infomondia_series",
                 },
             },
         },
@@ -65,7 +64,14 @@ def test_parse_event_ignores_extra_fields():
             "right": {"series_code": "B"},
         },
         "inputs": [{"datasetId": "ds1", "seriesCode": "A"}],
-        "catalog": {"datasets": {"ds1": {"manifestPath": "ds1/current/manifest.json"}}},
+        "catalog": {
+            "datasets": {
+                "ds1": {
+                    "manifestPath": "ds1/current/manifest.json",
+                    "projectionsPath": "projections/ds1",
+                }
+            }
+        },
         "output": {"basePath": "s3://bucket/metrics/test/"},
     }
 
@@ -95,7 +101,12 @@ def test_parse_sns_wrapped_message():
                 },
                 "inputs": [{"datasetId": "ds1", "seriesCode": "A"}],
                 "catalog": {
-                    "datasets": {"ds1": {"manifestPath": "ds1/current/manifest.json"}}
+                    "datasets": {
+                        "ds1": {
+                            "manifestPath": "ds1/current/manifest.json",
+                            "projectionsPath": "projections/ds1",
+                        }
+                    }
                 },
                 "output": {"basePath": "s3://bucket/metrics/test/"},
             }
@@ -148,6 +159,7 @@ def test_window_op_expression():
             "datasets": {
                 "bcra_infomondia_series": {
                     "manifestPath": "bcra_infomondia_series/current/manifest.json",
+                    "projectionsPath": "projections/bcra_infomondia_series",
                 },
             },
         },
@@ -196,6 +208,7 @@ def test_composite_expression():
             "datasets": {
                 "bcra_infomondia_series": {
                     "manifestPath": "bcra_infomondia_series/current/manifest.json",
+                    "projectionsPath": "projections/bcra_infomondia_series",
                 },
             },
         },

@@ -3,10 +3,13 @@
 import json
 
 import boto3
+import structlog
 from botocore.exceptions import ClientError
 
 from metrics_worker.application.dto.events import MetricRunRequestedEvent
 from metrics_worker.infrastructure.config.settings import Settings
+
+logger = structlog.get_logger()
 
 
 class SQSConsumer:
@@ -16,6 +19,7 @@ class SQSConsumer:
         """Initialize SQS client."""
         self.sqs_client = boto3.client("sqs", region_name=settings.aws_region)
         self.queue_url = settings.aws_sqs_run_request_queue_url
+        self.settings = settings
 
     async def receive_message(self) -> tuple[MetricRunRequestedEvent | None, str | None]:
         """Receive and parse message from SQS.
@@ -29,6 +33,7 @@ class SQSConsumer:
                 MaxNumberOfMessages=1,
                 WaitTimeSeconds=20,
                 MessageAttributeNames=["All"],
+                VisibilityTimeout=self.settings.aws_sqs_visibility_timeout_seconds,
             )
 
             messages = response.get("Messages", [])
@@ -97,4 +102,43 @@ class SQSConsumer:
                 ReceiptHandle=receipt_handle,
             )
         except ClientError as e:
+            error_code = e.response.get("Error", {}).get("Code", "")
+            if error_code == "InvalidParameterValue" and "receipt handle has expired" in str(e).lower():
+                logger.warning(
+                    "receipt_handle_expired",
+                    message="Receipt handle expired, message will be reprocessed",
+                    error=str(e),
+                )
+                return
             raise RuntimeError(f"Failed to delete message from SQS: {e}") from e
+
+    async def extend_visibility_timeout(self, receipt_handle: str, timeout_seconds: int | None = None) -> None:
+        """Extend the visibility timeout for a message.
+        
+        Args:
+            receipt_handle: The receipt handle of the message
+            timeout_seconds: New visibility timeout in seconds. If None, uses extension setting.
+        """
+        if timeout_seconds is None:
+            timeout_seconds = self.settings.aws_sqs_visibility_timeout_extension_seconds
+        
+        try:
+            self.sqs_client.change_message_visibility(
+                QueueUrl=self.queue_url,
+                ReceiptHandle=receipt_handle,
+                VisibilityTimeout=timeout_seconds,
+            )
+        except ClientError as e:
+            error_code = e.response.get("Error", {}).get("Code", "")
+            if error_code == "InvalidParameterValue" and "receipt handle has expired" in str(e).lower():
+                logger.warning(
+                    "receipt_handle_expired_on_extend",
+                    message="Receipt handle expired while trying to extend visibility timeout",
+                    error=str(e),
+                )
+                return
+            logger.warning(
+                "failed_to_extend_visibility",
+                message="Failed to extend visibility timeout, continuing processing",
+                error=str(e),
+            )

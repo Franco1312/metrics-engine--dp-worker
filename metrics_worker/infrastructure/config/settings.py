@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     aws_s3_bucket: str
     aws_sqs_run_request_queue_url: str
     aws_sqs_run_request_queue_enabled: bool = True
+    aws_sqs_visibility_timeout_seconds: int = 300  # 5 minutes default
+    aws_sqs_visibility_timeout_extension_seconds: int = 60  # Extend by 1 minute each time
     # SNS Topics for publishing events to Control Plane (all required)
     # The Control Plane consumes from SQS queues subscribed to these SNS topics
     aws_sns_metric_run_started_topic_arn: str

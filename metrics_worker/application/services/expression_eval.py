@@ -26,20 +26,57 @@ def _register_evaluator(expr_type: ExpressionType, evaluator: Callable) -> None:
     _EXPRESSION_EVALUATORS[expr_type] = evaluator
 
 
-def _infer_expression_type_from_op(op: str) -> ExpressionType:
-    """Infer expression type from operation string."""
-    try:
-        WindowOp(op)
-        return ExpressionType.WINDOW_OP
-    except ValueError:
-        pass
+def _infer_expression_type_from_op(op: str, expression: dict[str, any] | None = None) -> ExpressionType:
+    """Infer expression type from operation string and expression structure.
     
+    Uses structure to disambiguate operations that exist in multiple enums:
+    - window_op: requires "series" and "window" fields
+    - composite: requires "operands" array field
+    - series_math: requires "left" and "right" fields
+    """
+    # If expression structure is provided, use it to disambiguate
+    if expression is not None:
+        # window_op must have "series" and "window" fields
+        if "series" in expression and "window" in expression:
+            try:
+                WindowOp(op)
+                return ExpressionType.WINDOW_OP
+            except ValueError:
+                pass
+        
+        # composite must have "operands" array field
+        if "operands" in expression:
+            try:
+                CompositeOp(op)
+                return ExpressionType.COMPOSITE
+            except ValueError:
+                pass
+        
+        # series_math must have "left" and "right" fields
+        if "left" in expression and "right" in expression:
+            try:
+                SeriesMathOp(op)
+                return ExpressionType.SERIES_MATH
+            except ValueError:
+                pass
+    
+    # Fallback: try enums in order of specificity
+    # Check WindowOp first (but only if structure matches)
+    if expression is None or ("series" in expression and "window" in expression):
+        try:
+            WindowOp(op)
+            return ExpressionType.WINDOW_OP
+        except ValueError:
+            pass
+    
+    # Check SeriesMathOp
     try:
         SeriesMathOp(op)
         return ExpressionType.SERIES_MATH
     except ValueError:
         pass
     
+    # Check CompositeOp
     try:
         CompositeOp(op)
         return ExpressionType.COMPOSITE
@@ -229,8 +266,8 @@ def _resolve_operand(
         if not op_str:
             raise InvalidExpressionError("Missing operation in operand")
         
-        # Infer expression type from operation and evaluate
-        expr_type = _infer_expression_type_from_op(op_str)
+        # Infer expression type from operation and expression structure
+        expr_type = _infer_expression_type_from_op(op_str, operand)
         evaluator = _EXPRESSION_EVALUATORS.get(expr_type)
         if not evaluator:
             raise InvalidExpressionError(f"Cannot evaluate operand with type: {expr_type}")

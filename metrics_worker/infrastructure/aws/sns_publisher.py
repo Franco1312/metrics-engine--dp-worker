@@ -3,12 +3,15 @@
 import json
 
 import boto3
+import structlog
 from botocore.exceptions import ClientError
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from metrics_worker.domain.ports import EventBusPort
 from metrics_worker.domain.types import Timestamp
 from metrics_worker.infrastructure.config.settings import Settings
+
+logger = structlog.get_logger()
 
 
 class SNSPublisher(EventBusPort):
@@ -122,7 +125,34 @@ class SNSPublisher(EventBusPort):
                 publish_params["MessageGroupId"] = run_id
                 publish_params["MessageDeduplicationId"] = f"{run_id}:{event_type}"
 
-            self.sns_client.publish(**publish_params)
+            logger.info(
+                "publishing_event_to_sns",
+                event_type=event_type,
+                run_id=run_id,
+                metric_code=metric_code,
+                topic_arn=topic_arn,
+                status=event.get("status"),
+            )
+
+            response = self.sns_client.publish(**publish_params)
+            
+            logger.info(
+                "event_published_to_sns",
+                event_type=event_type,
+                run_id=run_id,
+                metric_code=metric_code,
+                message_id=response.get("MessageId"),
+                topic_arn=topic_arn,
+            )
         except ClientError as e:
+            logger.error(
+                "failed_to_publish_event_to_sns",
+                event_type=event_type,
+                run_id=run_id,
+                metric_code=metric_code,
+                topic_arn=topic_arn,
+                error=str(e),
+                error_code=e.response.get("Error", {}).get("Code"),
+            )
             raise RuntimeError(f"Failed to publish event to SNS: {e}") from e
 

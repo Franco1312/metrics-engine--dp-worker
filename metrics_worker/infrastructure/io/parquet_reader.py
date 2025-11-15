@@ -41,8 +41,9 @@ class ParquetReader(DataReaderPort):
         logger.info(
             "reading_series_from_paths",
             series_code=series_code,
-            parquet_paths=parquet_paths,
-            pyarrow_paths=pyarrow_paths,
+            parquet_files_count=len(parquet_paths),
+            first_path=parquet_paths[0] if parquet_paths else None,
+            last_path=parquet_paths[-1] if len(parquet_paths) > 1 else None,
             bucket=self.bucket,
         )
 
@@ -59,8 +60,8 @@ class ParquetReader(DataReaderPort):
             logger.error(
                 "failed_to_open_dataset_from_paths",
                 series_code=series_code,
-                parquet_paths=parquet_paths,
-                pyarrow_paths=pyarrow_paths,
+                parquet_files_count=len(parquet_paths),
+                first_path=parquet_paths[0] if parquet_paths else None,
                 error=str(e),
             )
             raise ValueError(
@@ -86,8 +87,8 @@ class ParquetReader(DataReaderPort):
             logger.error(
                 "series_not_found_in_paths",
                 series_code=series_code,
-                parquet_paths=parquet_paths,
-                pyarrow_paths=pyarrow_paths,
+                parquet_files_count=len(parquet_paths),
+                first_path=parquet_paths[0] if parquet_paths else None,
                 available_count=len(available_series) if available_series else 0,
                 available_series=available_series[:10] if available_series else [],
             )

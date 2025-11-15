@@ -80,17 +80,50 @@ def _extract_series_from_expression(
 
 
 def _infer_type(expr: ExpressionJson) -> ExpressionType:
-    """Infer expression type from structure."""
+    """Infer expression type from structure.
+    
+    Uses structure to disambiguate operations that exist in multiple enums:
+    - window_op: requires "series" and "window" fields
+    - composite: requires "operands" array field
+    - series_math: requires "left" and "right" fields
+    """
     op = expr.get("op", "")
     if not op:
         return ExpressionType.SERIES_MATH  # Default fallback
     
-    # Try to match to enums in order of specificity
-    try:
-        WindowOp(op)
-        return ExpressionType.WINDOW_OP
-    except ValueError:
-        pass
+    # Use structure to disambiguate operations that exist in multiple enums
+    # window_op must have "series" and "window" fields
+    if "series" in expr and "window" in expr:
+        try:
+            WindowOp(op)
+            return ExpressionType.WINDOW_OP
+        except ValueError:
+            pass
+    
+    # composite must have "operands" array field
+    if "operands" in expr:
+        try:
+            CompositeOp(op)
+            return ExpressionType.COMPOSITE
+        except ValueError:
+            pass
+    
+    # series_math must have "left" and "right" fields
+    if "left" in expr and "right" in expr:
+        try:
+            SeriesMathOp(op)
+            return ExpressionType.SERIES_MATH
+        except ValueError:
+            pass
+    
+    # Fallback: try enums in order of specificity
+    # Check WindowOp first (but only if structure matches)
+    if "series" in expr and "window" in expr:
+        try:
+            WindowOp(op)
+            return ExpressionType.WINDOW_OP
+        except ValueError:
+            pass
     
     try:
         SeriesMathOp(op)

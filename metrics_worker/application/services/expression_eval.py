@@ -189,7 +189,11 @@ def _evaluate_window_op(
     if not window_func:
         raise InvalidExpressionError(f"Unsupported window operation: {op}")
     
-    result = window_func(series_df["value"], window)
+    # For lag operation, pass obs_time_index for calendar-based lag
+    if op == WindowOp.LAG:
+        result = window_func(series_df["value"], window, obs_time_index=series_df.index)
+    else:
+        result = window_func(series_df["value"], window)
 
     result_df = pd.DataFrame({"obs_time": result.index, "value": result.values})
     return result_df

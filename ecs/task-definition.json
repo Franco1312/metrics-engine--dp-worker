@@ -1,0 +1,83 @@
+{
+  "family": "metrics-engine-dp-worker",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "1024",
+  "memory": "2048",
+  "executionRoleArn": "arn:aws:iam::706341500093:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::706341500093:role/ecsTaskRole",
+  "containerDefinitions": [
+    {
+      "name": "metrics-worker",
+      "image": "706341500093.dkr.ecr.us-east-1.amazonaws.com/metrics-engine-dp-worker:latest",
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 9300,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        {
+          "name": "AWS_REGION",
+          "value": "us-east-1"
+        },
+        {
+          "name": "AWS_S3_BUCKET",
+          "value": "ingestor-datasets"
+        },
+        {
+          "name": "AWS_SQS_RUN_REQUEST_QUEUE_URL",
+          "value": "https://sqs.us-east-1.amazonaws.com/706341500093/metrics-engine-dp-worker-control-plane-consumer.fifo"
+        },
+        {
+          "name": "AWS_SQS_RUN_REQUEST_QUEUE_ENABLED",
+          "value": "true"
+        },
+        {
+          "name": "AWS_SNS_METRIC_RUN_STARTED_TOPIC_ARN",
+          "value": "arn:aws:sns:us-east-1:706341500093:metric-run-started.fifo"
+        },
+        {
+          "name": "AWS_SNS_METRIC_RUN_HEARTBEAT_TOPIC_ARN",
+          "value": "arn:aws:sns:us-east-1:706341500093:metric-run-heartbeat.fifo"
+        },
+        {
+          "name": "AWS_SNS_METRIC_RUN_COMPLETED_TOPIC_ARN",
+          "value": "arn:aws:sns:us-east-1:706341500093:metric-run-completed.fifo"
+        },
+        {
+          "name": "WORKER_HEARTBEAT_INTERVAL_SECONDS",
+          "value": "30"
+        },
+        {
+          "name": "OUTPUT_COMPRESSION",
+          "value": "snappy"
+        },
+        {
+          "name": "PROMETHEUS_PORT",
+          "value": "9300"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/metrics-engine-dp-worker",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      },
+      "healthCheck": {
+        "command": [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:9300/metrics').read()\" || exit 1"
+        ],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 60
+      }
+    }
+  ]
+}
+

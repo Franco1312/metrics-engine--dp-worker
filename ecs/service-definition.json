@@ -1,0 +1,33 @@
+{
+  "serviceName": "metrics-engine-dp-worker",
+  "cluster": "metrics-engine-cluster",
+  "taskDefinition": "metrics-engine-dp-worker",
+  "desiredCount": 2,
+  "launchType": "FARGATE",
+  "networkConfiguration": {
+    "awsvpcConfiguration": {
+      "subnets": [
+        "subnet-07f43b5401f01479f",
+        "subnet-083e610819166f00a"
+      ],
+      "securityGroups": [
+        "sg-03f5139aaeeba2f44"
+      ],
+      "assignPublicIp": "ENABLED"
+    }
+  },
+  "deploymentConfiguration": {
+    "maximumPercent": 200,
+    "minimumHealthyPercent": 100,
+    "deploymentCircuitBreaker": {
+      "enable": true,
+      "rollback": true
+    }
+  },
+  "healthCheckGracePeriodSeconds": 60,
+  "enableExecuteCommand": true,
+  "platformVersion": "LATEST",
+  "schedulingStrategy": "REPLICA",
+  "serviceRegistries": []
+}
+

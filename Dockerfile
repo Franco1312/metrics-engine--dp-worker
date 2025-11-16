@@ -20,6 +20,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /build/requirements.txt* ./
+COPY pyproject.toml ./
 RUN if [ -f requirements.txt ]; then \
     pip install --no-cache-dir -r requirements.txt; \
     else \

@@ -6,9 +6,11 @@ RUN pip install --no-cache-dir poetry==1.7.1
 
 COPY pyproject.toml poetry.lock* ./
 
-RUN poetry export -f requirements.txt --output requirements.txt --without-hashes || \
-    poetry export -f requirements.txt --output requirements.txt --without-hashes --no-interaction || \
-    echo "No poetry.lock found, will install from pyproject.toml"
+RUN if [ -f poetry.lock ]; then \
+    poetry export -f requirements.txt --output requirements.txt --without-hashes --no-interaction; \
+    else \
+    poetry export -f requirements.txt --output requirements.txt --without-hashes --no-interaction --only main; \
+    fi
 
 FROM python:3.11-slim
 
@@ -26,7 +28,7 @@ RUN if [ -f requirements.txt ]; then \
     else \
     pip install --no-cache-dir poetry==1.7.1 && \
     poetry config virtualenvs.create false && \
-    poetry install --no-interaction --no-ansi --no-dev; \
+    poetry install --no-interaction --no-ansi --only main; \
     fi
 
 RUN apt-get purge -y gcc g++ && apt-get autoremove -y

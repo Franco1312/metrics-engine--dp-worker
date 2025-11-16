@@ -6,13 +6,11 @@ RUN pip install --no-cache-dir poetry==1.7.1 poetry-plugin-export
 
 COPY pyproject.toml poetry.lock* ./
 
-# Generate requirements.txt - if lock exists use it, otherwise install only main deps and export
-RUN if [ -f poetry.lock ]; then \
-    poetry export -f requirements.txt --output requirements.txt --without-hashes --no-interaction --only main; \
-    else \
-    poetry install --no-interaction --no-ansi --only main && \
-    poetry export -f requirements.txt --output requirements.txt --without-hashes --no-interaction --only main; \
-    fi
+# Generate requirements.txt from pyproject.toml
+# Use poetry export with --only main to exclude dev dependencies
+RUN poetry export -f requirements.txt --output requirements.txt --without-hashes --no-interaction --only main 2>/dev/null || \
+    (poetry lock --no-update 2>/dev/null || poetry lock) && \
+    poetry export -f requirements.txt --output requirements.txt --without-hashes --no-interaction --only main
 
 FROM python:3.11-slim
 

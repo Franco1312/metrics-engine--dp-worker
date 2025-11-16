@@ -2,13 +2,14 @@ FROM python:3.11-slim as builder
 
 WORKDIR /build
 
-RUN pip install --no-cache-dir poetry==1.7.1
+RUN pip install --no-cache-dir poetry==1.7.1 poetry-plugin-export
 
 COPY pyproject.toml poetry.lock* ./
 
 RUN if [ -f poetry.lock ]; then \
-    poetry export -f requirements.txt --output requirements.txt --without-hashes --no-interaction; \
+    poetry export -f requirements.txt --output requirements.txt --without-hashes --no-interaction --only main; \
     else \
+    poetry lock --no-interaction --no-update && \
     poetry export -f requirements.txt --output requirements.txt --without-hashes --no-interaction --only main; \
     fi
 
@@ -21,15 +22,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     g++ \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /build/requirements.txt* ./
-COPY pyproject.toml ./
-RUN if [ -f requirements.txt ]; then \
-    pip install --no-cache-dir -r requirements.txt; \
-    else \
-    pip install --no-cache-dir poetry==1.7.1 && \
-    poetry config virtualenvs.create false && \
-    poetry install --no-interaction --no-ansi --only main; \
-    fi
+COPY --from=builder /build/requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
 
 RUN apt-get purge -y gcc g++ && apt-get autoremove -y
 

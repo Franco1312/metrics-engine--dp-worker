@@ -252,7 +252,7 @@ async def _write_output(
         output_paths.parquet_path,
     )
 
-    manifest_data_prefix = S3Path.parent(output_paths.manifest_path)
+    manifest_data_prefix = S3Path.parent(output_paths.parquet_path)
     manifest = await build_manifest(
         run_id,
         metric_code,

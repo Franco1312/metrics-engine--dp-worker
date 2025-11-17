@@ -127,11 +127,8 @@ class SNSPublisher(EventBusPort):
 
             logger.info(
                 "publishing_event_to_sns",
-                event_type=event_type,
                 run_id=run_id,
-                metric_code=metric_code,
-                topic_arn=topic_arn,
-                status=event.get("status"),
+                message_body=event,
             )
 
             response = self.sns_client.publish(**publish_params)

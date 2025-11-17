@@ -10,7 +10,7 @@ from metrics_worker.infrastructure.aws.sns_publisher import SNSPublisher
 from metrics_worker.infrastructure.aws.sqs_consumer import SQSConsumer
 from metrics_worker.infrastructure.config.settings import Settings
 from metrics_worker.infrastructure.io.parquet_reader import ParquetReader
-from metrics_worker.infrastructure.io.parquet_writer import ParquetWriter
+from metrics_worker.infrastructure.io.jsonl_writer import JsonlWriter
 from metrics_worker.infrastructure.observability.logging import configure_logging
 from metrics_worker.infrastructure.observability.metrics import (
     runs_failed,
@@ -80,7 +80,7 @@ async def main_loop() -> None:
     s3_io = S3IO(settings)
     catalog = S3CatalogAdapter(s3_io)
     data_reader = ParquetReader(s3_io)
-    output_writer = ParquetWriter(s3_io)
+    output_writer = JsonlWriter(s3_io)
     event_bus = SNSPublisher(settings)
     clock = SystemClock()
 

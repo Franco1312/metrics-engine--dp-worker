@@ -11,21 +11,48 @@ El servicio `metrics-engine-dp-worker` ya está desplegado en ECS.
 
 ## Lo que falta configurar
 
-### 1. Secrets de GitHub Actions (para CI/CD)
+### 1. Configurar permisos IAM para el usuario de CI/CD
 
-Para que el workflow de GitHub Actions pueda desplegar automáticamente, necesitas configurar los siguientes secrets en GitHub:
+El usuario IAM `metrics-engine-dp-worker-deploy` necesita permisos para ECR y ECS.
+
+**Opción A: Desde AWS CLI**
+
+```bash
+# Crear la política
+aws iam create-policy \
+  --policy-name metrics-engine-dp-worker-ci-cd \
+  --policy-document file://ecs/iam-policy-ci-cd.json \
+  --region us-east-1
+
+# Adjuntar la política al usuario (reemplaza ACCOUNT_ID con 706341500093)
+aws iam attach-user-policy \
+  --user-name metrics-engine-dp-worker-deploy \
+  --policy-arn arn:aws:iam::706341500093:policy/metrics-engine-dp-worker-ci-cd
+```
+
+**Opción B: Desde la consola AWS**
+
+1. Ve a IAM > Policies > Create policy
+2. En la pestaña JSON, pega el contenido de `ecs/iam-policy-ci-cd.json`
+3. Click en "Next" y dale un nombre: `metrics-engine-dp-worker-ci-cd`
+4. Click en "Create policy"
+5. Ve a IAM > Users > `metrics-engine-dp-worker-deploy` > Add permissions
+6. Selecciona "Attach policies directly"
+7. Busca y selecciona `metrics-engine-dp-worker-ci-cd`
+8. Click en "Add permissions"
+
+### 2. Secrets de GitHub Actions (para CI/CD)
+
+Una vez que el usuario IAM tenga los permisos, configura los secrets en GitHub:
 
 **Configurar en**: Settings > Secrets and variables > Actions > New repository secret
 
-- **`AWS_ACCESS_KEY_ID`**: Access key de AWS con permisos para:
-  - ECR: `ecr:GetAuthorizationToken`, `ecr:BatchCheckLayerAvailability`, `ecr:GetDownloadUrlForLayer`, `ecr:BatchGetImage`, `ecr:PutImage`, `ecr:InitiateLayerUpload`, `ecr:UploadLayerPart`, `ecr:CompleteLayerUpload`
-  - ECS: `ecs:RegisterTaskDefinition`, `ecs:DescribeServices`, `ecs:UpdateService`, `ecs:DescribeTaskDefinition`
-  
+- **`AWS_ACCESS_KEY_ID`**: Access key del usuario `metrics-engine-dp-worker-deploy`
 - **`AWS_SECRET_ACCESS_KEY`**: Secret key correspondiente
 
-**Nota**: Puedes usar el mismo usuario IAM que usaste para crear el servicio, o crear uno específico para CI/CD.
+**Nota**: Asegúrate de que el secret key no tenga espacios ni saltos de línea al copiarlo.
 
-### 2. Verificar permisos de IAM Roles (opcional)
+### 3. Verificar permisos de IAM Roles (opcional)
 
 Los roles IAM ya están configurados en la task definition, pero verifica que tengan los permisos correctos:
 

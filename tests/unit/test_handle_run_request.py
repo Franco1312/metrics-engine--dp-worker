@@ -313,7 +313,7 @@ def test_calculate_output_paths():
     paths = _calculate_output_paths(base_path, version_ts, run_id)
 
     assert "v20240101_120000" in paths.parquet_path
-    assert "metrics.parquet" in paths.parquet_path
+    assert "metrics.jsonl" in paths.parquet_path
     assert "v20240101_120000" in paths.manifest_path
     assert "manifest.json" in paths.manifest_path
     assert "current" in paths.current_manifest_path

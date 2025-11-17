@@ -220,7 +220,7 @@ El bucket se usa en todas las operaciones de S3:
 - **S3IO**: Todas las operaciones (`get_json`, `put_json`, `put_object`)
 - **S3CatalogAdapter**: Lectura de manifests
 - **ParquetReader**: Construcción de paths S3 completos
-- **ParquetWriter**: Escritura de resultados
+- **JsonlWriter**: Escritura de resultados en formato JSONL
 
 **Ubicación del código:**
 - `metrics_worker/infrastructure/config/settings.py` - Línea 10

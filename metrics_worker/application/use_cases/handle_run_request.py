@@ -228,7 +228,7 @@ def _calculate_output_paths(base_path: str, version_ts: str, run_id: str) -> _Ou
     prefix = S3Path.rstrip_separator(S3Path.normalize(base_path))
 
     return _OutputPaths(
-        parquet_path=S3Path.join(prefix, version_ts, "data", "metrics.parquet"),
+        parquet_path=S3Path.join(prefix, version_ts, "data", "metrics.jsonl"),
         manifest_path=S3Path.join(prefix, version_ts, "manifest.json"),
         current_manifest_path=S3Path.join(prefix, "current", "manifest.json"),
         marker_path=S3Path.join(prefix, "runs", f"{run_id}.ok"),
@@ -246,11 +246,10 @@ async def _write_output(
     output_writer: OutputWriterPort,
     clock: ClockPort,
 ) -> MetricOutputManifest:
-    """Write results to S3 (Parquet and manifest)."""
-    output_files = await output_writer.write_parquet(
+    """Write results to S3 (JSONL and manifest)."""
+    output_files = await output_writer.write_jsonl(
         result_df,
         output_paths.parquet_path,
-        compression="snappy",
     )
 
     manifest_data_prefix = S3Path.parent(output_paths.manifest_path)

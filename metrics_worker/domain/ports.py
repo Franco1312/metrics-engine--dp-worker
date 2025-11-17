@@ -30,13 +30,12 @@ class OutputWriterPort(ABC):
     """Port for writing metric outputs."""
 
     @abstractmethod
-    async def write_parquet(
+    async def write_jsonl(
         self,
         data: SeriesFrame,
         output_path: str,
-        compression: str = "snappy",
     ) -> list[str]:
-        """Write parquet file(s) and return list of file paths."""
+        """Write JSONL file(s) and return list of file paths."""
 
     @abstractmethod
     async def write_manifest(

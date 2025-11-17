@@ -17,7 +17,7 @@
 │    - Crear adaptadores:                                            │
 │      • S3IO → S3CatalogAdapter (catalog)                         │
 │      • ParquetReader (data_reader)                               │
-│      • ParquetWriter (output_writer)                             │
+│      • JsonlWriter (output_writer)                               │
 │      • SNSPublisher (event_bus)                                  │
 │      • SystemClock (clock)                                       │
 │      • SQSConsumer (sqs_consumer)                                │
@@ -40,7 +40,7 @@
 │                              ▼                                   │
 │    ┌──────────────────────────────────────────────────────────┐ │
 │    │ 2.2. IDEMPOTENCIA                                        │ │
-│    │     ParquetWriter.check_run_marker()                     │ │
+│    │     JsonlWriter.check_run_marker()                       │ │
 │    │     ├─ Verificar S3: metrics/{code}/runs/{runId}.ok     │ │
 │    │     └─ Si existe → skip y delete message                 │ │
 │    └──────────────────────────────────────────────────────────┘ │
@@ -95,13 +95,13 @@
 │    │     ┌──────────────────────────────────────────────────┐ │ │
 │    │     │ 2.3.5. ESCRIBIR RESULTADOS                       │ │ │
 │    │     │     ├─ Clock.format_version_ts()                 │ │ │
-│    │     │     ├─ ParquetWriter.write_parquet()              │ │ │
+│    │     │     ├─ JsonlWriter.write_jsonl()                  │ │ │
 │    │     │     │  └─ S3: metrics/{code}/{versionTs}/data/   │ │ │
 │    │     │     ├─ build_output_manifest()                    │ │ │
-│    │     │     ├─ ParquetWriter.write_manifest()             │ │ │
+│    │     │     ├─ JsonlWriter.write_manifest()                │ │ │
 │    │     │     │  ├─ metrics/{code}/{versionTs}/manifest.json│ │ │
 │    │     │     │  └─ metrics/{code}/current/manifest.json   │ │ │
-│    │     │     └─ ParquetWriter.create_run_marker()          │ │ │
+│    │     │     └─ JsonlWriter.create_run_marker()            │ │ │
 │    │     │        └─ metrics/{code}/runs/{runId}.ok         │ │ │
 │    │     └──────────────────────────────────────────────────┘ │ │
 │    │                       │                                   │ │
@@ -176,7 +176,7 @@
 
 - **IO**:
   - `parquet_reader.py`: Lector Parquet (PyArrow)
-  - `parquet_writer.py`: Escritor Parquet
+  - `jsonl_writer.py`: Escritor JSONL
 
 - **Runtime**:
   - `catalog_adapter.py`: Adaptador de catálogo
@@ -196,7 +196,7 @@
 2. **Use Case** → `CatalogPort` → `S3CatalogAdapter` → `S3IO` → **S3** (manifest)
 3. **Use Case** → `DataReaderPort` → `ParquetReader` → **S3** (Parquet)
 4. **Use Case** → `ExpressionEval` → **Resultado** (DataFrame)
-5. **Use Case** → `OutputWriterPort` → `ParquetWriter` → **S3** (Parquet + manifest)
+5. **Use Case** → `OutputWriterPort` → `JsonlWriter` → **S3** (JSONL + manifest)
 6. **Use Case** → `EventBusPort` → `SNSPublisher` → **SNS** (eventos)
 
 ## Eventos Publicados

@@ -18,7 +18,7 @@ async def test_validate_output_manifest_success():
         version_ts="2025-01-15T10-30-00",
         created_at=datetime.now(),
         row_count=1000,
-        outputs={"data_prefix": "metrics/test.metric/2025-01-15T10-30-00", "files": ["metrics.parquet"]},
+        outputs={"data_prefix": "metrics/test.metric/2025-01-15T10-30-00", "files": ["metrics.jsonl"]},
     )
 
     await validate_manifest(manifest, "test-run-123", "test.metric")
@@ -33,7 +33,7 @@ async def test_validate_output_manifest_wrong_run_id():
         version_ts="2025-01-15T10-30-00",
         created_at=datetime.now(),
         row_count=1000,
-        outputs={"data_prefix": "metrics/test.metric/2025-01-15T10-30-00", "files": ["metrics.parquet"]},
+        outputs={"data_prefix": "metrics/test.metric/2025-01-15T10-30-00", "files": ["metrics.jsonl"]},
     )
 
     with pytest.raises(ManifestValidationError, match="run_id mismatch"):
@@ -49,7 +49,7 @@ async def test_validate_output_manifest_wrong_metric_code():
         version_ts="2025-01-15T10-30-00",
         created_at=datetime.now(),
         row_count=1000,
-        outputs={"data_prefix": "metrics/test.metric/2025-01-15T10-30-00", "files": ["metrics.parquet"]},
+        outputs={"data_prefix": "metrics/test.metric/2025-01-15T10-30-00", "files": ["metrics.jsonl"]},
     )
 
     with pytest.raises(ManifestValidationError, match="metric_code mismatch"):
@@ -65,7 +65,7 @@ async def test_validate_output_manifest_missing_version_ts():
         version_ts="",
         created_at=datetime.now(),
         row_count=1000,
-        outputs={"data_prefix": "metrics/test.metric/2025-01-15T10-30-00", "files": ["metrics.parquet"]},
+        outputs={"data_prefix": "metrics/test.metric/2025-01-15T10-30-00", "files": ["metrics.jsonl"]},
     )
 
     with pytest.raises(ManifestValidationError, match="missing version_ts"):
@@ -81,7 +81,7 @@ async def test_validate_output_manifest_negative_row_count():
         version_ts="2025-01-15T10-30-00",
         created_at=datetime.now(),
         row_count=-1,
-        outputs={"data_prefix": "metrics/test.metric/2025-01-15T10-30-00", "files": ["metrics.parquet"]},
+        outputs={"data_prefix": "metrics/test.metric/2025-01-15T10-30-00", "files": ["metrics.jsonl"]},
     )
 
     with pytest.raises(ManifestValidationError, match="Invalid row_count"):
@@ -97,7 +97,7 @@ async def test_validate_output_manifest_missing_data_prefix():
         version_ts="2025-01-15T10-30-00",
         created_at=datetime.now(),
         row_count=1000,
-        outputs={"files": ["metrics.parquet"]},
+        outputs={"files": ["metrics.jsonl"]},
     )
 
     with pytest.raises(ManifestValidationError, match="missing outputs.data_prefix"):

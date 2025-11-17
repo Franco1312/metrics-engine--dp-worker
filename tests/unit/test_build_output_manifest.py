@@ -16,7 +16,7 @@ async def test_build_output_manifest():
     metric_code = "test.metric"
     version_ts = "2025-01-15T10-30-00"
     row_count = 1000
-    output_files = ["metrics.parquet"]
+    output_files = ["metrics.jsonl"]
     data_prefix = "metrics/test.metric/2025-01-15T10-30-00"
 
     clock = MagicMock()

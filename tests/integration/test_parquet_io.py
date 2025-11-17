@@ -9,7 +9,6 @@ import pyarrow.parquet as pq
 import pytest
 
 from metrics_worker.infrastructure.io.parquet_reader import ParquetReader
-from metrics_worker.infrastructure.io.parquet_writer import ParquetWriter
 
 
 @pytest.fixture
